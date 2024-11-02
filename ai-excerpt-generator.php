@@ -59,23 +59,25 @@ function ai_openai_api_key_field_callback() {
 	$api_key = get_option('ai_openai_api_key');
 	echo '<input type="text" name="ai_openai_api_key" value="' . esc_attr($api_key) . '" size="40">';
 }
+
+add_action('save_post', 'generate_ai_excerpt', 10, 2);
 function generate_ai_excerpt($post_id, $post) {
-	if (wp_is_post_revision($post_id) || 'auto-draft' === $post->post_status) {
+	if ( 'auto-draft' === $post->post_status ) {
 		return;
 	}
-
 	// Get OpenAI API Key
 	$api_key = get_option('ai_openai_api_key');
-	if (empty($api_key)) return;
+	if ( empty( $api_key ) ) return;
 
 	// Gather context from the post
 	$content = $post->post_content;
+	$content = ! empty( $meta_description ) ? $meta_description : '';
 	$title = $post->post_title;
 	$meta_description = get_post_meta($post_id, '_meta_description', true);
+	$meta_description = ! empty( $meta_description ) ? $meta_description : '';
 	$image_urls = wp_get_attachment_image_src(get_post_thumbnail_id($post_id), 'full');
-
 	// Prepare content to send to OpenAI
-	$prompt = "Generate a brief, authentic excerpt for a blog post titled '{$title}', using this content: '{$content}', metadata description: '{$meta_description}', and main image: '{$image_urls[0]}'.";
+	$prompt = "Generate a brief, authentic excerpt for a blog post titled '{$title}', using this content: '{$content}', metadata description: '{$meta_description}', and main image: '{$image_urls[0]}'. Don't include the blog title in the exceprt text and the excerpt should not be more than 30 words";
 
 	$url        = 'https://api.openai.com/v1/chat/completions';
     $headers    = array(
@@ -107,12 +109,12 @@ function generate_ai_excerpt($post_id, $post) {
             'timeout'     => 5000,
         )
     );
+
     if ( is_wp_error( $response ) ) {
         return null;
     }
     $body = json_decode( wp_remote_retrieve_body( $response ), true );
-	$excerpt = trim($body->choices[0]->text);
-
+	$excerpt = trim($body['choices'][0]['message']['content']);
 	if ($excerpt) {
 		// Update post excerpt
 		wp_update_post([
